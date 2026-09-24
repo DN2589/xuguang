@@ -132,6 +132,7 @@ dialog .section-head{margin-bottom:6px}
 .pw-card input{width:100%;box-sizing:border-box;min-height:44px;border:1px solid var(--line);border-radius:12px;padding:0 14px;font-size:1rem;margin-bottom:10px;background:#fff;color:var(--ink)}
 .pw-card input:focus{outline:2px solid var(--theme-strong);outline-offset:1px}
 .pw-err{color:#c0392b;font-size:.85rem;margin:0 0 10px;min-height:1.2em}
+.pw-hint{color:var(--theme-muted);font-size:.78rem;margin:12px 0 0;opacity:.85;line-height:1.5}
 .pw-card button{width:100%;min-height:44px}
 #toast{position:fixed;z-index:9999;bottom:22px;left:50%;transform:translateX(-50%);max-width:calc(100% - 32px);padding:12px 18px;border-radius:12px;background:var(--theme-strong);color:#fff;box-shadow:0 5px 20px #29182026}
 .theme-grid{display:flex;flex-wrap:wrap;gap:8px}
@@ -252,6 +253,7 @@ html[data-theme-mode="mono"] #toast{filter:grayscale(1)}
     <input id="pw-input2" type="password" autocomplete="off" placeholder="再次输入密码" hidden>
     <p class="pw-err" id="pw-err" hidden></p>
     <button id="pw-btn" type="button" class="primary">进入</button>
+    <p class="pw-hint">忘记密码？请先确认已导出数据备份，再在浏览器中清除本站数据后重新设置。</p>
   </div>
 </div>
 
