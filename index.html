@@ -1089,7 +1089,7 @@ const SEED_TASKS=[
     if(localStorage.getItem(SEED_REV_KEY)!==SEED_REV){
       try{
         const old=JSON.parse(localStorage.getItem(KEY)||null);
-        if(old&&typeof old===object){
+        if(old&&typeof old==="object"){
           old.tasks=SEED_TASKS.map(t=>({...t}));
           old.timer=null;
           localStorage.setItem(KEY,JSON.stringify(old));
