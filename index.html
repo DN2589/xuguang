@@ -1226,7 +1226,7 @@ const SEED_TASKS=[
   }
 
   const subjects=()=>[...new Set([
-    "英语一","数学","逻辑","政治","专业课",
+    "英语一","数学","逻辑","政治","专业课","重要事项",
     ...state.tasks.map(t=>t.subject),...state.sessions.map(s=>s.subject)
   ])];
   const tasksOn=d=>state.tasks.filter(t=>t.date===d)
@@ -1814,6 +1814,7 @@ const SEED_TASKS=[
       return {start:`${C.pad(+m[1])}:${m[2]}`,end:`${C.pad(+m[3]%24)}:${m[4]}`,minutes:(b<=a?b+1440:b)-a};
     };
     const subjectFor=(title,start)=>{
+      if(/重要事项/.test(title))return "重要事项";
       if(/单词|翻译|text|阅读|英语|作文|长难句|新题型/i.test(title))return "英语一";
       if(/高数|线代|概率|数学|例题|800题/.test(title))return "数学";
       if(/专业课/.test(title))return "专业课";
@@ -1865,7 +1866,7 @@ const SEED_TASKS=[
           if(!date||!title||skipped.some(word=>title.includes(word)))return;
           let explicitSubject="";
           const marked=title.match(/^\[?([^\]｜|：:]{1,12})\]?[｜|：:]\s*(.+)$/);
-          if(marked&&/^(英语一?|数学|逻辑|政治|专业课|复盘)$/.test(marked[1].trim())){
+          if(marked&&/^(英语一?|数学|逻辑|政治|专业课|复盘|重要事项)$/.test(marked[1].trim())){
             explicitSubject=marked[1].trim();title=marked[2].trim();
           }
           const hour=+range.start.slice(0,2),period=hour<12?"上午":hour<18?"下午":"晚上";
@@ -1961,7 +1962,7 @@ const SEED_TASKS=[
         case "log":
           $("log-form").reset();
           $("log-date").value=ui.date;
-          $("log-subject").value="英语二";
+          $("log-subject").value="英语一";
           $("log-dialog").showModal();
           break;
 
