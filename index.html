@@ -803,20 +803,15 @@ function themeTokens(hex){
       const {data:rows}=await sb.from("user_data")
         .select("data,updated_at").eq("id",user.id).maybeSingle();
       if(rows&&rows.data&&typeof rows.data==="object"){
-        if(localStorage.getItem(SYNC_KEY)){
-          state=validate(rows.data);
-          try{
-            localStorage.setItem(KEY,JSON.stringify(state));
-            try{localStorage.setItem(SEED_BAK_KEY,JSON.stringify(state));}catch(e){}
-          }catch(e){}
-        }else{
-          await pushCloud();
-          try{localStorage.setItem(SYNC_KEY,"1");}catch(e){}
-        }
+        state=validate(rows.data);
+        try{
+          localStorage.setItem(KEY,JSON.stringify(state));
+          try{localStorage.setItem(SEED_BAK_KEY,JSON.stringify(state));}catch(e){}
+        }catch(e){}
       }else{
         await pushCloud();
-        try{localStorage.setItem(SYNC_KEY,"1");}catch(e){}
       }
+      try{localStorage.setItem(SYNC_KEY,"1");}catch(e){}
       cloudReady=true;
       if($("account-email"))$("account-email").textContent=user.email||user.id;
       render();
