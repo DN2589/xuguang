@@ -124,6 +124,15 @@ dialog::backdrop{background:rgba(var(--theme-shadow),.3)}
 dialog .section-head{margin-bottom:6px}
 .dialog-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:20px;flex-wrap:wrap}
 .dialog-actions .danger{margin-right:auto}
+#pw-gate{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--theme-bg),#fff);padding:20px}
+#pw-gate[hidden]{display:none}
+.pw-card{width:min(380px,100%);background:#fff;border:1px solid var(--line);border-radius:20px;padding:28px 24px;box-shadow:0 18px 50px rgba(var(--theme-shadow),.12);text-align:center}
+.pw-card h2{margin:0 0 6px;color:var(--theme-ink)}
+.pw-sub{color:var(--theme-muted);font-size:.85rem;margin:0 0 14px}
+.pw-card input{width:100%;box-sizing:border-box;min-height:44px;border:1px solid var(--line);border-radius:12px;padding:0 14px;font-size:1rem;margin-bottom:10px;background:#fff;color:var(--ink)}
+.pw-card input:focus{outline:2px solid var(--theme-strong);outline-offset:1px}
+.pw-err{color:#c0392b;font-size:.85rem;margin:0 0 10px;min-height:1.2em}
+.pw-card button{width:100%;min-height:44px}
 #toast{position:fixed;z-index:9999;bottom:22px;left:50%;transform:translateX(-50%);max-width:calc(100% - 32px);padding:12px 18px;border-radius:12px;background:var(--theme-strong);color:#fff;box-shadow:0 5px 20px #29182026}
 .theme-grid{display:flex;flex-wrap:wrap;gap:8px}
 .theme-choice{display:inline-flex;flex-direction:row;align-items:center;gap:7px;min-width:0;min-height:34px;padding:5px 9px;background:#fff;border:1px solid var(--line);border-radius:10px}
@@ -234,6 +243,17 @@ html[data-theme-mode="mono"] #toast{filter:grayscale(1)}
 </style>
 </head>
 <body>
+
+<div id="pw-gate" hidden>
+  <div class="pw-card">
+    <h2 id="pw-title">输入访问密码</h2>
+    <p class="pw-sub" id="pw-sub">页面仅本人可用，请输入访问密码</p>
+    <input id="pw-input" type="password" autocomplete="off" placeholder="访问密码">
+    <input id="pw-input2" type="password" autocomplete="off" placeholder="再次输入密码" hidden>
+    <p class="pw-err" id="pw-err" hidden></p>
+    <button id="pw-btn" type="button" class="primary">进入</button>
+  </div>
+</div>
 
 <div class="shell">
   <header class="top">
@@ -746,7 +766,54 @@ function themeTokens(hex){
 }
 
 /* 面板 */
-(function(){
+(async function(){
+  /* 密码门：页面仅本人可用 */
+  const PW_KEY="one-page-study-pw-hash",UNLOCK_KEY="one-page-study-unlocked";
+  const sha256=async s=>{
+    const d=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s));
+    return [...new Uint8Array(d)].map(b=>b.toString(16).padStart(2,"0")).join("");
+  };
+  const gateOk=await new Promise(resolve=>{
+    const gate=document.getElementById("pw-gate");
+    const UNLOCK_MS=7*24*3600*1000;
+    try{
+      const u=JSON.parse(localStorage.getItem(UNLOCK_KEY)||"null");
+      if(u&&u.t&&Date.now()-u.t<UNLOCK_MS&&localStorage.getItem(PW_KEY)){
+        gate.hidden=true;resolve(true);return;
+      }
+    }catch{}
+    gate.hidden=false;
+    const setup=!localStorage.getItem(PW_KEY);
+    document.getElementById("pw-title").textContent=setup?"设置访问密码":"输入访问密码";
+    document.getElementById("pw-sub").textContent=setup?"页面仅本人使用，请设置一个仅自己知道的密码":"页面仅本人可用，请输入访问密码";
+    document.getElementById("pw-input2").hidden=!setup;
+    const input=document.getElementById("pw-input"),input2=document.getElementById("pw-input2"),
+      err=document.getElementById("pw-err"),btn=document.getElementById("pw-btn");
+    input.value="";input2.value="";err.hidden=true;
+    btn.textContent=setup?"设置并进入":"进入";
+    async function submit(){
+      err.hidden=true;
+      const pwd=input.value;
+      if(!pwd){err.textContent="请输入密码。";err.hidden=false;input.focus();return;}
+      if(setup){
+        if(pwd.length<4){err.textContent="密码至少 4 位。";err.hidden=false;return;}
+        if(pwd!==input2.value){err.textContent="两次输入的密码不一致。";err.hidden=false;return;}
+        localStorage.setItem(PW_KEY,await sha256(pwd));
+      }else{
+        if((await sha256(pwd))!==localStorage.getItem(PW_KEY)){
+          err.textContent="密码错误。";err.hidden=false;input.select();return;
+        }
+      }
+      localStorage.setItem(UNLOCK_KEY,JSON.stringify({t:Date.now()}));
+      gate.hidden=true;
+      resolve(true);
+    }
+    btn.addEventListener("click",submit);
+    input.addEventListener("keydown",e=>{if(e.key==="Enter")submit();});
+    input2.addEventListener("keydown",e=>{if(e.key==="Enter")submit();});
+    input.focus();
+  });
+  if(!gateOk)return;
   const C=plannerCore();
   const $=id=>document.getElementById(id);
   const escape=s=>String(s??"").replace(/[&<>"']/g,c=>({
@@ -1605,6 +1672,20 @@ const SEED_TASKS=[
       </div>
       <p class="hint">数据保存在当前浏览器；导出备份后可在另一设备恢复。</p>
       </div>
+    </details>
+    <details class="settings-group">
+      <summary><span class="settings-summary">访问密码<small>页面仅本人可用 · 修改 / 锁定 / 重置</small></span></summary>
+      <div class="settings-content">
+      <p class="muted">页面已加密码锁：不知道密码的人看不到任何内容。数据本身只保存在你当前浏览器里。</p>
+      <label class="field">新密码<input id="pw-new" type="password" autocomplete="off" placeholder="至少 4 位"></label>
+      <label class="field">再次输入<input id="pw-new2" type="password" autocomplete="off"></label>
+      <div class="actions">
+        ${button("保存新密码","change-pw","","primary")}
+        ${button("锁定本设备","lock-device","","soft")}
+        ${button("重置密码","reset-pw","","soft")}
+      </div>
+      <p class="hint">锁定本设备：立即退出，下次打开需重新输入密码。重置：清除密码，下次打开需重新设置。</p>
+      </div>
     </details></div>`;
   }
 
@@ -1911,7 +1992,7 @@ const SEED_TASKS=[
     return output.map(row=>row.join("\t")).join("\n");
   }
 
-  document.addEventListener("click",event=>{
+  document.addEventListener("click",async event=>{
     const el=event.target.closest("[data-action]");
     if(!el)return;
     const action=el.dataset.action,id=el.dataset.id;
@@ -2071,6 +2152,28 @@ const SEED_TASKS=[
 
         case "raw-backup":
           download("学习面板原始数据.json",localStorage.getItem(KEY)||"","application/json");
+          break;
+
+        case "change-pw":{
+          const a=$("pw-new").value,b=$("pw-new2").value;
+          if(a.length<4)throw Error("密码至少 4 位。");
+          if(a!==b)throw Error("两次输入的密码不一致。");
+          localStorage.setItem(PW_KEY,await sha256(a));
+          $("pw-new").value="";$("pw-new2").value="";
+          notice("访问密码已更新。");
+          break;
+        }
+
+        case "lock-device":
+          localStorage.removeItem(UNLOCK_KEY);
+          notice("本设备已锁定。");
+          setTimeout(()=>location.reload(),500);
+          break;
+
+        case "reset-pw":
+          localStorage.removeItem(PW_KEY);localStorage.removeItem(UNLOCK_KEY);
+          notice("访问密码已重置，刷新后请重新设置。");
+          setTimeout(()=>location.reload(),800);
           break;
 
         case "delete-task":{
