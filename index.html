@@ -171,6 +171,13 @@ dialog .section-head{margin-bottom:6px}
 .pie-item-pct{font-weight:700;font-size:.95rem}
 .pie-item-time{font-size:.82rem;color:var(--muted);padding-left:18px}
 @media(max-width:600px){.pie-list{grid-template-columns:1fr}.pie-svg{max-width:100%}}
+#add-task-fab{position:fixed;right:20px;bottom:20px;z-index:9997;width:56px;height:56px;border-radius:50%;border:none;background:var(--theme-base);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(var(--theme-shadow),.28),0 2px 6px rgba(var(--theme-shadow),.18);transition:transform .15s ease,background .15s ease,box-shadow .15s ease}
+#add-task-fab:hover{background:var(--theme-solid-hover);transform:translateY(-2px) scale(1.04);box-shadow:0 10px 24px rgba(var(--theme-shadow),.35)}
+#add-task-fab:active{transform:translateY(0) scale(.96)}
+#add-task-fab::before,#add-task-fab::after{content:"";position:absolute;top:50%;left:50%;background:#fff;border-radius:2px;transform:translate(-50%,-50%)}
+#add-task-fab::before{width:22px;height:3.5px}
+#add-task-fab::after{width:3.5px;height:22px}
+#add-task-fab:focus-visible{outline:3px solid var(--theme-strong);outline-offset:3px}
 .floating-clock{position:fixed;z-index:9998;width:72px;height:72px;display:flex;align-items:center;justify-content:center;cursor:grab;user-select:none;touch-action:none;transition:transform .2s;filter:drop-shadow(0 4px 14px rgba(var(--theme-shadow),.3))}
 .floating-clock:active{cursor:grabbing;transform:scale(1.06)}
 .floating-clock svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
@@ -255,6 +262,8 @@ html[data-theme-mode="mono"] #toast{filter:grayscale(1)}
   <main id="view"></main>
   <footer>数据保存在当前浏览器 · 备份入口在「设置」</footer>
 </div>
+
+<button id="add-task-fab" type="button" data-action="add-task" aria-label="新增任务" title="新增任务"></button>
 
 <datalist id="subjects-list"></datalist>
 
@@ -1760,7 +1769,7 @@ const SEED_TASKS=[
     $("task-form").reset();
     $("task-dialog-title").textContent=t?"编辑任务":"新增任务";
     $("task-title").value=t?.title||"";
-    $("task-subject").value=t?.subject||"英语二";
+    $("task-subject").value=t?.subject||"英语一";
     $("task-date").value=t?.date||date;
     $("task-start").value=t?.start||"";
     $("task-minutes").value=t?.minutes||60;
@@ -1877,6 +1886,10 @@ const SEED_TASKS=[
     try{
       const task=state.tasks.find(t=>t.id===id);
       switch(action){
+        case "add-task":
+          openTask();
+          break;
+
         case "theme":
           applyTheme(el.dataset.theme,true);
           break;
@@ -2232,8 +2245,8 @@ const SEED_TASKS=[
   /* 悬浮钟拖拽 */
   (function(){
     const fc=$("floating-clock");
-    // 默认位置：右下角
-    let pos=JSON.parse(localStorage.getItem("fc-pos")||'null')||{x:window.innerWidth-90,y:window.innerHeight-100};
+    // 默认位置：右下角（悬浮钟默认在新增任务按钮上方）
+    let pos=JSON.parse(localStorage.getItem("fc-pos")||'null')||{x:window.innerWidth-90,y:window.innerHeight-152};
     let dragging=false,moved=false,offX=0,offY=0;
     function apply(){fc.style.left=pos.x+'px';fc.style.top=pos.y+'px';fc.style.right='auto';fc.style.bottom='auto';}
     apply();
