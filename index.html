@@ -178,8 +178,9 @@ dialog .section-head{margin-bottom:6px}
 #add-task-fab::before{width:22px;height:3.5px}
 #add-task-fab::after{width:3.5px;height:22px}
 #add-task-fab:focus-visible{outline:3px solid var(--theme-strong);outline-offset:3px}
-.floating-clock{position:fixed;z-index:9998;width:72px;height:72px;display:flex;align-items:center;justify-content:center;cursor:grab;user-select:none;touch-action:none;transition:transform .2s;filter:drop-shadow(0 4px 14px rgba(var(--theme-shadow),.3))}
-.floating-clock:active{cursor:grabbing;transform:scale(1.06)}
+.floating-clock{position:fixed;z-index:9998;width:72px;height:72px;right:12px;bottom:86px;display:flex;align-items:center;justify-content:center;cursor:pointer;user-select:none;touch-action:manipulation;transition:transform .15s ease;filter:drop-shadow(0 4px 14px rgba(var(--theme-shadow),.3))}
+.floating-clock:hover{transform:scale(1.05)}
+.floating-clock:active{transform:scale(.94)}
 .floating-clock svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
 .floating-clock .fc-bg{fill:none;stroke:rgba(var(--theme-rgb),.18);stroke-width:3.5}
 .floating-clock .fc-ring{fill:none;stroke:var(--theme-solid);stroke-width:3.5;stroke-linecap:round;transition:stroke-dashoffset 1s linear}
@@ -1079,7 +1080,11 @@ const SEED_TASKS=[
       const mode=t.mode||"stopwatch";
       if(mode!=="stopwatch"&&mode!=="countdown")bad();
       const endAt=mode==="countdown"&&Number.isFinite(t.endAt)?t.endAt:null;
-      result.timer={taskId:t.taskId,subject:t.subject,note:t.note,startedAt:t.startedAt,mode,endAt};
+      const paused=!!t.paused;
+      const pausedAt=paused&&Number.isFinite(t.pausedAt)?t.pausedAt:null;
+      result.timer={taskId:t.taskId,subject:t.subject,note:t.note,startedAt:t.startedAt,mode,endAt,
+        ...(paused?{paused:true,pausedAt,
+          ...(mode==="countdown"&&Number.isFinite(t.pausedRemainingMs)?{pausedRemainingMs:t.pausedRemainingMs}:{})}:{})};
     }
     if(input.examDate&&typeof input.examDate==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(input.examDate)){
       result.examDate=input.examDate;
@@ -1704,10 +1709,14 @@ const SEED_TASKS=[
   function tick(){
     if(!state.timer)return;
     const now=Date.now();
-    const isCountdown=state.timer.mode==="countdown"&&state.timer.endAt;
-    const secs=isCountdown?Math.max(0,(state.timer.endAt-now)/1000):(now-state.timer.startedAt)/1000;
+    const t=state.timer;
+    const paused=!!t.paused;
+    const isCountdown=t.mode==="countdown"&&t.endAt;
+    const secs=paused
+      ?(isCountdown?(t.pausedRemainingMs||0)/1000:(t.pausedAt-t.startedAt)/1000)
+      :(isCountdown?Math.max(0,(t.endAt-now)/1000):(now-t.startedAt)/1000);
     if($("running-time"))$("running-time").textContent=clock(secs);
-    if(isCountdown&&secs<=0){
+    if(!paused&&isCountdown&&secs<=0){
       beep();stopTimer();save();render();
       notice("⏰ 倒数结束，已自动记录学习时长！");
       return;
@@ -1716,11 +1725,11 @@ const SEED_TASKS=[
     const fc=$("floating-clock");
     if(fc){
       fc.hidden=false;
-      fc.classList.add("running");
+      if(paused)fc.classList.remove("running");else fc.classList.add("running");
       const totalSec=Math.floor(secs);
       const mm=Math.floor(totalSec/60),ss=totalSec%60;
       $("fc-time").textContent=`${C.pad(mm)}:${C.pad(ss)}`;
-      $("fc-label").textContent=isCountdown?"倒数":"专注";
+      $("fc-label").textContent=paused?"已暂停":(isCountdown?"倒数":"专注");
       // Ring progress
       const ring=$("fc-ring");
       if(ring){
@@ -1752,15 +1761,38 @@ const SEED_TASKS=[
   }
 
   function timerSessions(){
-    return state.timer?C.segments(state.timer.startedAt,Date.now()).map(s=>({
-      id:uid(),date:s.date,seconds:s.seconds,subject:state.timer.subject,note:state.timer.note
-    })):[];
+    const t=state.timer;
+    if(!t)return[];
+    const end=t.paused?t.pausedAt:Date.now();
+    return C.segments(t.startedAt,end).map(s=>({
+      id:uid(),date:s.date,seconds:s.seconds,subject:t.subject,note:t.note
+    }));
   }
 
   function stopTimer(){
     if(!state.timer)return;
-    state.sessions.push(...timerSessions());
+    if(!state.timer.paused)state.sessions.push(...timerSessions());
     state.timer=null;
+  }
+
+  function pauseTimer(){
+    const t=state.timer;if(!t)return;
+    state.sessions.push(...timerSessions());
+    if(t.mode==="countdown")t.pausedRemainingMs=t.endAt-Date.now();
+    t.paused=true;t.pausedAt=Date.now();
+    save();render();notice("计时已暂停，时长已记录。");
+  }
+
+  function resumeTimer(){
+    const t=state.timer;if(!t||!t.paused)return;
+    if(t.mode==="countdown"){t.endAt=Date.now()+t.pausedRemainingMs;delete t.pausedRemainingMs;}
+    t.paused=false;t.startedAt=Date.now();delete t.pausedAt;
+    save();render();notice("计时继续。");
+  }
+
+  function finishTimer(){
+    if(!state.timer)return;
+    stopTimer();save();render();notice("计时已结束，时长已统计。");
   }
 
   function openTask(id="",date=ui.date,period=""){
@@ -2243,45 +2275,25 @@ const SEED_TASKS=[
   updateExamCountdown();
   setInterval(updateExamCountdown,30000);
 
-  /* 悬浮钟拖拽 */
+  /* 悬浮钟：单击 = 暂停/继续，双击 = 结束计时并统计 */
   (function(){
     const fc=$("floating-clock");
-    // 默认位置：右下角（悬浮钟默认在新增任务按钮上方）
-    let pos=JSON.parse(localStorage.getItem("fc-pos")||'null')||{x:window.innerWidth-90,y:window.innerHeight-152};
-    let dragging=false,moved=false,offX=0,offY=0;
-    function apply(){fc.style.left=pos.x+'px';fc.style.top=pos.y+'px';fc.style.right='auto';fc.style.bottom='auto';}
-    apply();
-
-    function down(e){
-      dragging=true;moved=false;
-      const pt=e.touches?e.touches[0]:e;
-      const r=fc.getBoundingClientRect();
-      offX=pt.clientX-r.left;offY=pt.clientY-r.top;
-      e.preventDefault();
-    }
-    function move(e){
-      if(!dragging)return;
-      moved=true;
-      const pt=e.touches?e.touches[0]:e;
-      pos.x=pt.clientX-offX;pos.y=pt.clientY-offY;
-      pos.x=Math.max(0,Math.min(window.innerWidth-64,pos.x));
-      pos.y=Math.max(0,Math.min(window.innerHeight-64,pos.y));
-      apply();
-    }
-    function up(){
-      dragging=false;
-      localStorage.setItem("fc-pos",JSON.stringify(pos));
-      // 单击（未拖动）→ 暂停计时
-      if(!moved&&state.timer){
-        stopTimer();save();render();notice("计时已暂停并记录。");
+    let lastClick=0,pending=null;
+    fc.addEventListener("click",()=>{
+      const now=Date.now();
+      if(now-lastClick<300){
+        if(pending){clearTimeout(pending);pending=null;}
+        lastClick=0;
+        finishTimer();
+      }else{
+        lastClick=now;
+        pending=setTimeout(()=>{
+          pending=null;lastClick=0;
+          if(!state.timer)return;
+          if(state.timer.paused)resumeTimer();else pauseTimer();
+        },300);
       }
-    }
-    fc.addEventListener("mousedown",down);
-    document.addEventListener("mousemove",move);
-    document.addEventListener("mouseup",up);
-    fc.addEventListener("touchstart",down,{passive:false});
-    document.addEventListener("touchmove",move,{passive:false});
-    document.addEventListener("touchend",up);
+    });
   })();
 })();
 </script>
